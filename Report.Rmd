@@ -1,0 +1,22 @@
+---
+title: "Report"
+author: "Luke Coughlin"
+output: 
+        html_document:
+                keep_md: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+# Summary  
+
+# Source Data  
+
+# Model Selection  
+
+# Out of Sample Error  
+
+# Conclusion
+
