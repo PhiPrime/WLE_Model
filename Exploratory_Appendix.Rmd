@@ -1,0 +1,26 @@
+---
+title: "Exploratory_Appendix"
+author: "Luke Coughlin"
+output: html_document:
+        keep_md: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# What is this Document?  
+Often when first obtaining data one will inspect it to understand how it works. I feel documenting what is done is helpful for reproducibility and transparency. However the amount of output that one views isn't always nessacry to be included in the full report, as such I'll keep all this exploratory code and display it here, along with some thoughts when appropriate.  
+
+# Load Data  
+```{r}
+trurl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+trdest <- paste0(getwd(), "/Data/training.csv")
+teurl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+tedest <- paste0(getwd(), "/Data/testing.csv")
+download.file(trurl, trdest)
+download.file(teurl, tedest)
+training <- read.csv(trdest)
+testing <- read.csv(tedest)
+```
+# Explore  
