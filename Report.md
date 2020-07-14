@@ -11,8 +11,13 @@ output:
 # Summary  
 
 # Source Data  
+The data that we are using comes from Velloso, E. et. al. and contains a training set of 
+
 
 # Model Selection  
+
+
+
 
 # Out of Sample Error  
 
