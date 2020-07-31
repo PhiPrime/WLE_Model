@@ -1,0 +1,185 @@
+---
+title: "Report"
+author: "Luke Coughlin"
+output: 
+        html_document:
+                keep_md: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+
+# Summary  
+This report aims to create a model that can be used to accurately predict if a user is performing an exercise correctly from a given test set. We approach this by splitting our training set into 60% training and 40% validation. We explore the data by looking at the importance of variables then selecting several models: regularized regression, linear discriminant analysis, and random forest. We check the out of sample accuracy to find the random forest model greater than 99.9% out of sample accuracy, as such we use it to predict the `classe`s of the test set.  
+
+
+# Source Data  
+
+```{r message = FALSE}
+trurl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+trdest <- paste0(getwd(), "/Data/training.csv")
+teurl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+tedest <- paste0(getwd(), "/Data/testing.csv")
+download.file(trurl, trdest)
+download.file(teurl, tedest)
+training <- read.csv(trdest)
+testing <- read.csv(tedest)
+```
+The data that we are using comes from Velloso, E. et. al. and contains a training set of `r nrow(training)` observations of six participants performing ten repetitions of the Unilateral Dumbbell Biceps Curl in five different ways, indicated by the `classe` variable:  
+A: Correctly performing the exercise  
+B: Mistakenly throwing their elbows to the front  
+C: Mistakenly lifting the dumbbell only halfway  
+D: Mistakenly lowering the dumbbell only halfway  
+E: Mistakenly throwing their hips to the front  
+
+Citation of paper data is from: 
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. **Qualitative Activity Recognition of Weight Lifting Exercises**. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013. 
+
+## Tidying Data  
+The testing data that we are given don't have any of the summary statistic variables that are available at the end of each window in the training data, as such we'll be removing these variables from both sets before proceeding.  
+```{r message = FALSE}
+library(tidyverse)
+summaryStats <- names(which(colSums(is.na(testing)) == 20))
+rawTrain <- select(training, -all_of(summaryStats))
+rawTest <- select(testing, -all_of(summaryStats))
+```
+
+In addition there are a few variables that are not helpful for making a prediction, such as the row number, so we will be removing those as well. The time stamp would be helpful if the test data we seek to predict on was also in a time series, however since this is not the case we'll be removing it as well. We are also going to mutate the `classe` variable into a factor to help with training the models.  
+```{r}
+extVar <- names(rawTrain)[c(1:7)]
+tidyTrain <- select(rawTrain, -all_of(extVar))
+tidyTest <- select(rawTest, -all_of(extVar))
+tidyTrain <- mutate(tidyTrain, classe = as.factor(classe))
+```
+
+The current training set will be split into a 60/40 training & validation set, respectively.    
+```{r message = FALSE}
+library(caret)
+inTrain <- createDataPartition(tidyTrain$classe, p = 0.6, list = FALSE)
+tidyTrain <- tidyTrain[inTrain, ]
+tidyValid <- tidyTrain[-inTrain,]
+
+```
+
+# Model Selection  
+
+## Importance of Variables  
+
+We are curious of the importance of the variables within a random forest for discerning between all `classe`s, as well as between each error type and the correct method. 
+```{r message = FALSE}
+library(randomForest)
+set.seed(1618)
+allMod <- randomForest(classe~., data = tidyTrain)
+abMod <- randomForest(classe~., data = 
+                              filter(tidyTrain,
+                                        as.character(classe) == "A"|
+                                        as.character(classe) == "B") %>%
+                              mutate(classe = factor(classe)))
+acMod <- randomForest(classe~., data = 
+                              filter(tidyTrain,
+                                        as.character(classe) == "A"|
+                                        as.character(classe) == "C") %>%
+                              mutate(classe = factor(classe)))
+adMod <- randomForest(classe~., data = 
+                              filter(tidyTrain,
+                                        as.character(classe) == "A"|
+                                        as.character(classe) == "D") %>%
+                              mutate(classe = factor(classe)))
+aeMod <- randomForest(classe~., data = 
+                              filter(tidyTrain,
+                                        as.character(classe) == "A"|
+                                        as.character(classe) == "E") %>%
+                              mutate(classe = factor(classe)))
+```
+
+To get an overview of the importance among the models that only look at the two `classe`s we're going to sum their values up and look at the highest values. To save on length from the output we're only going to display the highest 10 values for the summed importance and the importance from the model with all `classe`s present.
+
+```{r}
+allImp <-varImp(allMod)
+head(arrange(allImp, desc(Overall)), 10)
+
+abImp <- varImp(abMod)
+acImp <- varImp(acMod)
+adImp <- varImp(adMod)
+aeImp <- varImp(aeMod)
+
+impSums <- data.frame(
+        Variable = rownames(abImp),
+        Overall = rowSums(cbind(abImp$Overall, 
+                                acImp$Overall,
+                                adImp$Overall, 
+                                aeImp$Overall)))
+head(arrange(impSums, desc(Overall)), 10)
+```
+
+## Regularized Regression Model  
+Seeing multiple readings from the same devices appearing in the top few variables we first considered using a Regularized Regression model. As this method would help restrict some varaibles so they don't overly factor into the model, such as readings for the belt which likely are only strong indicators of a `classe E` error.  
+```{r}
+fileLoc <- "./Data/rrMod.rds"
+if (!file.exists(fileLoc)) { #If model's file not found
+set.seed(1618)
+tr <- as.data.frame(tidyTrain)
+control <- trainControl(method = "repeatedcv",
+                        number = 5,
+                        repeats = 5,
+                        search = "random")
+rrMod <- train(classe ~., tr, method = "glmnet",
+               preProc = c("center", "scale"),
+               trControl = control)
+saveRDS(rrMod, fileLoc)
+} else {#Read from file
+        rrMod <- readRDS(fileLoc)
+}
+
+confusionMatrix(predict(rrMod, tidyTrain), tidyTrain$classe)
+```
+
+The low in-sample accuracy of this model convinced us to not use it any further, as accuracy is always best within the training data, and 60% is not acceptable.   
+
+
+The next approach that we considered was to use Linear Discriminant Analysis, as it would create decision boundaries which may be good at determining when a reading is going outside of the acceptable method for lifting weights and entering an area that indicates an error is being performed.  
+```{r}
+ldamodel <- train(classe ~ ., data = tidyTrain, method = "lda")
+confusionMatrix(predict(ldamodel, newdata = tidyTrain), tidyTrain$classe)
+```
+
+Although the above results were better than our regularized regression model, it still had a pretty low in sample accuracy, which was concerning. So on the same idea of creating decision boundaries we decided to create a random forest model.
+```{r}
+fileLoc <- "./Data/rfMod.rds"
+if (!file.exists(fileLoc)) { #If model's file not found
+set.seed(1618033)
+rfmodel <- train(classe~., data = tidyTrain, method = "rf")
+
+saveRDS(rfmodel, fileLoc)
+} else {#Read from file
+        rfmodel <- readRDS(fileLoc)
+}
+
+confusionMatrix(predict(rfmodel, newdata = tidyTrain), tidyTrain$classe)
+```
+This random forest model had a high in-sample accuracy, which is concerning as it may indicate overfitting. We will have to see if this is the case by using our validation set.
+
+
+# Out of Sample Error  
+
+We'll be testing the two models, linear discriminant analysis and random forest, with the validation subset that was taken from our training data previous to building the models.
+```{r}
+confusionMatrix(predict(ldamodel, newdata = tidyValid), tidyValid$classe)
+```
+
+
+```{r}
+confusionMatrix(predict(rfmodel, newdata = tidyValid), tidyValid$classe)
+```
+This is great to see, our random forest model had 100% accuracy in the out of sample set. As such we'll be selecting this one to predict the `classe` values of the test set.  
+
+
+
+# Conclusion
+Since we transformed the testing data into `tidyTest` when we transformed the training data we can make our predictions with that variation of the data now.  
+```{r}
+testPred <- predict(rfmodel, newdata = tidyTest)
+testPred
+```
