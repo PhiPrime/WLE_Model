@@ -115,7 +115,7 @@ head(arrange(impSums, desc(Overall)), 10)
 ```
 
 ## Regularized Regression Model  
-Seeing multiple readings from the same devices appearing in the top few variables we first considered using a Regularized Regression model. As this method would help restrict some varaibles so they don't overly factor into the model, such as readings for the belt which likely are only strong indicators of a `classe E` error.  
+Seeing multiple readings from the same devices appearing in the top few variables we first considered using a Regularized Regression model. As this method would help restrict some variables so they don't overly factor into the model, such as readings for the belt which likely are only strong indicators of a `classe E` error.  
 ```{r}
 fileLoc <- "./Data/rrMod.rds"
 if (!file.exists(fileLoc)) { #If model's file not found
